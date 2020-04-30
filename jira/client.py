@@ -481,9 +481,8 @@ class JIRA(object):
             self._create_kerberos_session(timeout, kerberos_options=kerberos_options)
         elif auth:
             self._create_cookie_auth(auth, timeout)
-            validate = (
-                True
-            )  # always log in for cookie based auth, as we need a first request to be logged in
+            # always log in for cookie based auth, as we need a first request to be logged in
+            validate = True
         else:
             verify = self._options["verify"]
             self._session = ResilientSession(timeout=timeout)
@@ -944,7 +943,7 @@ class JIRA(object):
         name,
         project,
         description=None,
-        leadUserName=None,
+        leadAccountId=None,
         assigneeType=None,
         isAssigneeTypeValid=False,
     ):
@@ -956,8 +955,8 @@ class JIRA(object):
         :type project: str
         :param description: a description of the component
         :type description: str
-        :param leadUserName: the username of the user responsible for this component
-        :type leadUserName: Optional[str]
+        :param leadAccountId: the username of the user responsible for this component
+        :type leadAccountId: Optional[str]
         :param assigneeType: see the ComponentBean.AssigneeType class for valid values
         :type assigneeType: Optional[str]
         :param isAssigneeTypeValid: boolean specifying whether the assignee type is acceptable (Default: False)
@@ -971,8 +970,8 @@ class JIRA(object):
         }
         if description is not None:
             data["description"] = description
-        if leadUserName is not None:
-            data["leadUserName"] = leadUserName
+        if leadAccountId is not None:
+            data["leadAccountId"] = leadAccountId
         if assigneeType is not None:
             data["assigneeType"] = assigneeType
 
@@ -1569,7 +1568,7 @@ class JIRA(object):
 
     # non-resource
     @translate_resource_args
-    def assign_issue(self, issue, assignee):
+    def assign_issue(self, issue, assignee_id):
         """Assign an issue to a user. None will set it to unassigned. -1 will set it to Automatic.
 
         :param issue: the issue ID or key to assign
@@ -1585,7 +1584,7 @@ class JIRA(object):
             + str(issue)
             + "/assignee"
         )
-        payload = {"accountId": self._get_user_accountid(assignee)}
+        payload = {"accountId": assignee_id}
         # 'key' and 'name' are deprecated in favor of accountId
         r = self._session.put(url, data=json.dumps(payload))
         raise_on_error(r)
@@ -2176,7 +2175,13 @@ class JIRA(object):
 
     # non-resource
     def my_permissions(
-        self, projectKey=None, projectId=None, issueKey=None, issueId=None
+        self,
+        projectKey=None,
+        projectId=None,
+        issueKey=None,
+        issueId=None,
+        *,
+        permissions
     ):
         """Get a dict of all available permissions on the server.
 
@@ -2188,6 +2193,8 @@ class JIRA(object):
         :type issueKey: Optional[str]
         :param issueId: limit returned permissions to the specified issue
         :type issueId: Optional[str]
+        :param permissions: a CSV list of permission keys to get permissions for
+        :type permissions: str
         :rtype: Dict[str, Dict[str, Dict[str, str]]]
         """
         params = {}
@@ -2199,6 +2206,7 @@ class JIRA(object):
             params["issueKey"] = issueKey
         if issueId is not None:
             params["issueId"] = issueId
+        params["permissions"] = permissions
         return self._get_json("mypermissions", params=params)
 
     # Priorities
@@ -3444,9 +3452,9 @@ class JIRA(object):
             logging.error(ioe)
         return None
 
-    def current_user(self, field="key"):
-        """Returns the username or emailAddress of the current user. For anonymous
-        users it will return a value that evaluates as False.
+    def current_user(self, field="accountId"):
+        """Returns information about the current user, including but not limited
+        to their display name, e-mail, accountId.
 
         :rtype: str
         """
